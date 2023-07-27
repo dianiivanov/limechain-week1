@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.18;
-import "./Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract BookLibrary is Ownable {
     struct BookInfo {
-        bool isRecorded;
+        bool isBookRecordedInLibrary;
         uint32 copies;
         address[] allBorrowersEver;
     }
@@ -14,16 +14,17 @@ contract BookLibrary is Ownable {
         bool isRecorded;
     }
 
-    mapping (string => mapping(address => Borrowing)) private bookToBorrower;
-    mapping (string => BookInfo) private bookToInfo;
+    mapping (bytes32 => mapping(address => Borrowing)) private bookToBorrower;
+    mapping (bytes32 => BookInfo) private bookToInfo;
     string[] private books;
 
     function addBooks(string calldata _bookName, uint32 _numberOfCopies) public onlyOwner {
-        if(!bookToInfo[_bookName].isRecorded) {
+        bytes32 stringInBytes32 = stringToBytes32(_bookName);
+        if(!bookToInfo[stringInBytes32].isBookRecordedInLibrary) {
             books.push(_bookName);
-            bookToInfo[_bookName].isRecorded = false;
+            bookToInfo[stringInBytes32].isBookRecordedInLibrary = true;
         }
-        bookToInfo[_bookName].copies += _numberOfCopies;
+        bookToInfo[stringInBytes32].copies += _numberOfCopies;
     }
 
     function getBooks() public view returns(string[] memory) {
@@ -31,24 +32,30 @@ contract BookLibrary is Ownable {
     }
 
     function borrow(string memory _bookName) public {
-        require(!bookToBorrower[_bookName][msg.sender].isBorrowed, "You have already borrowed this book");
-        require(bookToInfo[_bookName].copies > 0, "There are not free copies of that book");
+        bytes32 stringInBytes32 = stringToBytes32(_bookName);
+        require(!bookToBorrower[stringInBytes32][msg.sender].isBorrowed, "You have already borrowed this book");
+        require(bookToInfo[stringInBytes32].copies > 0, "There are not free copies of that book");
 
-        bookToBorrower[_bookName][msg.sender].isBorrowed = true;
-        if(!bookToBorrower[_bookName][msg.sender].isRecorded) {
-            bookToBorrower[_bookName][msg.sender].isRecorded = true;
-            bookToInfo[_bookName].allBorrowersEver.push(msg.sender);
+        bookToBorrower[stringInBytes32][msg.sender].isBorrowed = true;
+        if(!bookToBorrower[stringInBytes32][msg.sender].isRecorded) {
+            bookToBorrower[stringInBytes32][msg.sender].isRecorded = true;
+            bookToInfo[stringInBytes32].allBorrowersEver.push(msg.sender);
         }
-        bookToInfo[_bookName].copies--;
+        bookToInfo[stringInBytes32].copies--;
     }
 
     function returnBook(string memory _bookName) public {
-        require(bookToBorrower[_bookName][msg.sender].isBorrowed, "You didn't borrow this book");
-        bookToBorrower[_bookName][msg.sender].isBorrowed = false;
-        bookToInfo[_bookName].copies++;
+        bytes32 stringInBytes32 = stringToBytes32(_bookName);
+        require(bookToBorrower[stringInBytes32][msg.sender].isBorrowed, "You didn't borrow this book");
+        bookToBorrower[stringInBytes32][msg.sender].isBorrowed = false;
+        bookToInfo[stringInBytes32].copies++;
     }
     
     function getBooksBorrowers(string memory _bookName) public view returns(address[] memory) {
-        return bookToInfo[_bookName].allBorrowersEver;
+        return bookToInfo[stringToBytes32(_bookName)].allBorrowersEver;
+    }
+
+    function stringToBytes32(string memory str) public pure returns (bytes32) {
+        return keccak256(bytes(str));
     }
 }
